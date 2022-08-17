@@ -1,5 +1,35 @@
 <a id="readme-top"></a>
 
+## How to use this template
+
+Update sheild urls
+
+* Update url for discourse, downloads, issues, current release, and contributors
+
+Project title and logo
+
+* Update project title and description
+* Update project logo
+* Update link to point to documentation about this project
+
+About the project
+
+* Update project screenshot
+* Update the paragraph with what your project is meant to accomplish
+
+Getting started
+
+* Describe how to get started with your project
+* Describe any prerequisites needed to run your project
+* Describe how to install and run your project
+
+Discuss
+
+* Create a tag in our discourse forum for your project
+* Update link in this section to point to the newly created tag
+
+After these steps are complete remove this checklist!
+
 [![Discourse Topics][discourse-shield]][discourse-url]
 ![Times Downloaded][downloads-shield]
 ![Issues][issues-shield]
@@ -30,11 +60,11 @@
     <a href="https://github.com/othneildrew/Best-README-Template"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/sailpoint/repo-template">View Demo</a>
+    <!-- <a href="https://github.com/sailpoint/repo-template">View Demo</a>
     ·
-    <a href="https://github.com/sailpoint-oss/repo-template/issues/new/choose">Report Bug</a>
+    <a href="https://github.com/sailpoint-oss/repo-template/issues">Report Bug</a>
     ·
-    <a href="https://github.com/sailpoint-oss/repo-template/issues/new/choose">Request Feature</a>
+    <a href="https://github.com/sailpoint-oss/repo-template/issueschoose">Request Feature</a> -->
   </p>
 </div>
 
@@ -117,8 +147,7 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- CONTACT -->
-## Contact
-
-SailPoint Developer Relations - developers@sailpoint.com
+## Discuss
+[Click Here](https://developer.sailpoint.com/dicuss/tag/{tagName}) to discuss this tool with other users.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
