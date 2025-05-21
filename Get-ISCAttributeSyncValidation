@@ -1,0 +1,109 @@
+#Requires -Version 7.0 -Modules iscUtils,Microsoft.PowerShell.SecretStore,Microsoft.PowerShell.SecretManagement
+<#
+.SYNOPSIS
+Output a CSV of all correlated accounts on a source, with all attribute values available for Attribute Sync and the corresponding
+    Identity Attribute values for the correlated identity.
+
+.DESCRIPTION
+Retrieves all accounts on a specified source, and outputs a CSV to enable you to analyze the values for each attribute available for
+    attribtue sync, compared against the value of the corresponding mapped Identity Attribute.
+
+.LINK
+https://github.com/sup3rmark/colab-ISC-PsAttributeSyncValidator
+
+.EXAMPLE
+Get-ISCAttributeSyncValidation -Tenant foo -SourceName bar
+
+.EXAMPLE
+Get-ISCAttributeSyncValidation -Tenant foo -SourceID 166xxxxxxxxxxxxxxxxxxxxxxxxxx1af
+
+.EXAMPLE
+Get-ISCAttributeSyncValidation -SourceName bar
+
+.EXAMPLE
+Get-ISCAttributeSyncValidation -Tenant foo -SourceName bar -OutputDirectory $PWD
+#>
+
+[CmdletBinding()]
+param(
+    # The ISC tenant name (eg. https://[tenant].identitynow.com); if not specified, will try to use an existing connection from iscUtils
+    [Parameter ()]
+    [string] $Tenant,
+
+    # Specify the source to check by name
+    [Parameter (ParameterSetName = 'SourceName'
+    )]
+    [string] $SourceName,
+
+    # Specify the source to check by ID
+    [Parameter (ParameterSetName = 'SourceID'
+    )]
+    [string] $SourceID,
+
+    # The directory to save the file to; if not specified, will export list to the clipboard
+    [Parameter ()]
+    [string] $OutputDirectory
+)
+
+#region Initial Connection
+if ($Tenant) {
+    Connect-ISC -Tenant $tenant
+}
+else {
+    try {
+        $null = Test-ISCConnection -ErrorAction Stop
+    }
+    catch {
+        throw 'No tenant provided. Please provide a tenant.'
+    }
+}
+$connection = Get-ISCConnection -IncludeSources
+$Tenant = $connection.Tenant
+$apiUrl = $connection.'API URL'
+$token = $connection.Token | ConvertTo-SecureString -AsPlainText
+$sources = $connection.SourceList
+
+if ($SourceName) {
+    $SourceID = ($sources | Where-Object { $_.name -eq $SourceName }).id
+    if ($null -eq $SourceID) {
+        throw 'No source found with specified name.'
+    }
+}
+else {
+    $SourceName = ($sources | Where-Object { $_.id -eq $SourceID }).name
+    if ($null -eq $SourceName) {
+        throw 'No source found with specified ID.'
+    }
+    
+}
+#endRegion
+
+#Get Attribute Sync Mapping
+$attrMapping = (Invoke-RestMethod -Uri "$apiUrl/v2025/sources/$SourceID/attribute-sync-config" -Authentication Bearer -Token $token -Headers @{'X-SailPoint-Experimental' = 'true' }).attributes
+
+#Get Source Accounts
+$accounts = Get-ISCAccount -List -Source $source
+
+#Get Identities
+$identities = Get-ISCIdentity -List
+
+#Compare
+$list = @()
+foreach ($account in $accounts | Where-Object { $_.uncorrelated -eq $false -and $_.disabled -eq $false }) {
+    $identity = $identities | Where-Object { $_.id -eq $account.identity.id }
+    $row = New-Object PSObject
+    foreach ($attribute in $attrMapping) {
+        $row | Add-Member -Type NoteProperty -Name "$source-$($attribute.target)" -Value $account.attributes."$($attribute.target)" -Force
+        $row | Add-Member -Type NoteProperty -Name "id-$($attribute.name)" -Value $identity.attributes."$($attribute.name)" -Force
+        $row | Add-Member -Type NoteProperty -Name "$($attribute.target)-Mismatch" -Value ($account.attributes."$($attribute.target)" -ne $identity.attributes."$($attribute.name)")
+    }
+    $list += $row
+    Clear-Variable row, identity
+}
+
+if ($OutputDirectory) {
+    $list | Export-Csv -Path "$OutputDirectory\$Tenant-$SourceName-$(Get-Date -Format yyyyMMddHHmmss).csv"
+}
+else {
+    $list | ConvertTo-Csv -Delimiter "`t" | Set-Clipboard
+}
