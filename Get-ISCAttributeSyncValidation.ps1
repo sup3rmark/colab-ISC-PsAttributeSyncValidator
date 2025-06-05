@@ -6,7 +6,7 @@ Output a CSV of all correlated accounts on a source, with all attribute values a
 
 .DESCRIPTION
 Retrieves all accounts on a specified source, and outputs a CSV to enable you to analyze the values for each attribute available for
-    attribtue sync, compared against the value of the corresponding mapped Identity Attribute.
+    attribute sync, compared against the value of the corresponding mapped Identity Attribute.
 
 .LINK
 https://github.com/sup3rmark/colab-ISC-PsAttributeSyncValidator
@@ -51,7 +51,7 @@ if ($Tenant) {
 }
 else {
     try {
-        $null = Test-ISCConnection -ErrorAction Stop
+        $null = Test-ISCConnection -ErrorAction Stop -ReconnectAutomatically
     }
     catch {
         throw 'No tenant provided. Please provide a tenant.'
@@ -62,6 +62,7 @@ $Tenant = $connection.Tenant
 $apiUrl = $connection.'API URL'
 $token = $connection.Token | ConvertTo-SecureString -AsPlainText
 $sources = $connection.SourceList
+Write-Verbose "Connected to $tenant tenant."
 
 if ($SourceName) {
     $SourceID = ($sources | Where-Object { $_.name -eq $SourceName }).id
@@ -74,22 +75,29 @@ else {
     if ($null -eq $SourceName) {
         throw 'No source found with specified ID.'
     }
-    
 }
+Write-Verbose "Source: $SourceName ($SourceID)."
 #endRegion
 
 #Get Attribute Sync Mapping
 $attrMapping = (Invoke-RestMethod -Uri "$apiUrl/v2025/sources/$SourceID/attribute-sync-config" -Authentication Bearer -Token $token -Headers @{'X-SailPoint-Experimental' = 'true' }).attributes
+Write-Verbose "Retrieved $SourceName attribute sync config."
 
 #Get Source Accounts
+Write-Verbose "Retrieving $SourceName accounts. This may take a bit..."
 $accounts = Get-ISCAccount -List -Source $source
+Write-Verbose "Retrieved $($accounts.count) accounts."
 
 #Get Identities
+Write-Verbose 'Retrieving identities. This may take a bit...'
 $identities = Get-ISCIdentity -List
+Write-Verbose "Retrieved $($identities.count) identities."
 
 #Compare
 $list = @()
-foreach ($account in $accounts | Where-Object { $_.uncorrelated -eq $false -and $_.disabled -eq $false }) {
+$accounts = $accounts | Where-Object { $_.uncorrelated -eq $false -and $_.disabled -eq $false }
+Write-Verbose "Comparing attributes for $($accounts.count) correlated, active accounts. This may take a bit..."
+foreach ($account in $accounts) {
     $identity = $identities | Where-Object { $_.id -eq $account.identity.id }
     $row = New-Object PSObject
     foreach ($attribute in $attrMapping) {
@@ -100,10 +108,25 @@ foreach ($account in $accounts | Where-Object { $_.uncorrelated -eq $false -and 
     $list += $row
     Clear-Variable row, identity
 }
+Write-Verbose 'Finished comparing attributes!'
+
+$attrList = @()
+foreach ($var in $($list | Get-Member | Where-Object { $_.Name -like '*-Mismatch' })) {
+    $attr = New-Object PSObject
+    $attr | Add-Member -Type NoteProperty -Name "$Source`Attribute" -Value ($var.name -replace ('-Mismatch', $null)) -Force
+    $attr | Add-Member -Type NoteProperty -Name 'MismatchCount' -Value ($list | Where-Object { $_."$($var.name)" -eq $true }).count -Force
+    $attr | Add-Member -Type NoteProperty -Name 'SyncEnabled' -Value ($attrMapping | Where-Object { $_.target -eq ($var.name -replace ('-Mismatch', $null)) }).enabled
+    $attrList += $attr
+}
+
+$attrList | Sort-Object -Property @{Expression = 'SyncEnabled'; Descending = $true }, @{Expression = 'MismatchCount'; Descending = $true }
 
 if ($OutputDirectory) {
-    $list | Export-Csv -Path "$OutputDirectory\$Tenant-$SourceName-$(Get-Date -Format yyyyMMddHHmmss).csv"
+    $filepath = "$OutputDirectory\$Tenant-$SourceName-$(Get-Date -Format yyyyMMddHHmmss).csv"
+    $list | Export-Csv -Path $filepath
+    Write-Host "Data sent to $filepath."
 }
 else {
     $list | ConvertTo-Csv -Delimiter "`t" | Set-Clipboard
+    Write-Host 'Data sent to Clipboard.'
 }
